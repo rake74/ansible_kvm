@@ -1,0 +1,46 @@
+---
+- name: Update pacman cache and upgrade packages
+  ansible.builtin.command: pacman -Syu --noconfirm
+  changed_when: true
+
+- name: Ensure required kernel modules are loaded
+  ansible.builtin.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - br_netfilter
+    - overlay
+
+- name: Enable kernel modules on boot
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: true
+    reload: true
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+
+- name: Turn off swap for the current session
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+  changed_when: true
+
+- name: Disable zram service to prevent swap recreation on systemd systems
+  ansible.builtin.systemd:
+    name: systemd-zram-setup@zram0.service
+    enabled: false
+    masked: true
+    state: stopped
+  ignore_errors: true
+
+- name: Ensure necessary packages are installed
+  ansible.builtin.pacman:
+    name:
+      - curl
+      - wget
+      - gnupg
+      - ca-certificates
+    state: present

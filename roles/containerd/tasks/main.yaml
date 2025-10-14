@@ -1,0 +1,28 @@
+---
+- name: Install containerd
+  ansible.builtin.pacman:
+    name: containerd
+    state: present
+
+- name: Configure containerd default config if not exists
+  ansible.builtin.shell: |
+    mkdir -p /etc/containerd
+    containerd config default | sudo tee /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml # Only run if file doesn't exist
+
+- name: Ensure SystemdCgroup = true is set for runc runtime
+  ansible.builtin.blockinfile:
+    path: /etc/containerd/config.toml
+    block: |
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+        SystemdCgroup = true
+    marker: "# {mark} ANSIBLE MANAGED BLOCK for containerd SystemdCgroup"
+    insertafter: '\[plugins\."io\.containerd\.grpc\.v1\.cri"\.containerd\.runtimes\.runc\]' # Insert after the runc runtime section header
+  notify: Restart containerd
+
+- name: Enable and start containerd service
+  ansible.builtin.systemd:
+    name: containerd
+    enabled: true
+    state: started

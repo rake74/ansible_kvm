@@ -1,0 +1,81 @@
+---
+- name: Install kubeadm, kubelet, kubectl
+  ansible.builtin.pacman:
+    name:
+      - kubeadm
+      - kubelet
+      - kubectl
+    state: present
+
+- name: Enable kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+
+- name: Initialize Kubernetes cluster
+  ansible.builtin.command: |
+    kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address={{ ansible_default_ipv4.address }}
+  args:
+    creates: /etc/kubernetes/admin.conf
+  register: kubeadm_init_output
+
+- name: Create .kube directory for current user
+  ansible.builtin.file:
+    path: /home/{{ ansible_user }}/.kube
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Copy kubeconfig to user's .kube directory
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/{{ ansible_user }}/.kube/config
+    remote_src: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0644'
+
+- name: Set KUBECONFIG environment variable in .bashrc
+  ansible.builtin.lineinfile:
+    path: "/home/{{ ansible_user }}/.bashrc"
+    line: "export KUBECONFIG=/home/{{ ansible_user }}/.kube/config"
+    create: true
+    state: present
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0644'
+
+- name: Install Calico Pod Network Addon
+  ansible.builtin.command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+  changed_when: true
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Get kubeadm join command for workers
+  ansible.builtin.shell: |
+    kubeadm token create --print-join-command
+  register: kubeadm_join_command
+  run_once: true
+  delegate_to: localhost
+  when: kubeadm_init_output is changed or kubeadm_init_output is skipped
+
+- name: Save join command for later use
+  ansible.builtin.set_fact:
+    join_command: "{{ kubeadm_join_command.stdout_lines[0] }}"
+  when: kubeadm_join_command is not skipped
+
+- name: Check if control-plane node is tainted
+  ansible.builtin.command: "kubectl get node {{ ansible_hostname }} -o jsonpath='{.spec.taints}'"
+  register: node_taints
+  changed_when: false
+  become: false
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+
+- name: Untaint the control-plane node to allow scheduling
+  ansible.builtin.command: "kubectl taint nodes {{ ansible_hostname }} node-role.kubernetes.io/control-plane-"
+  when: "'NoSchedule' in node_taints.stdout"
+  become: false
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"

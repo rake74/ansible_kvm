@@ -1,0 +1,17 @@
+---
+all:
+  hosts:
+    localhost: # <--- Change to 'localhost'
+      ansible_connection: local # <--- Specify local connection
+      ansible_user: "{{ lookup('env', 'USER') }}"
+      ansible_python_interpreter: /usr/bin/python3
+  children:
+    kubernetes:
+      hosts:
+        localhost: # <--- Change to 'localhost'
+    kube_master:
+      hosts:
+        localhost: # <--- Change to 'localhost'
+    kube_workers:
+      hosts:
+        localhost: # <--- Change to 'localhost'
