@@ -1,0 +1,10 @@
+---
+virtualization_host_packages:
+  - qemu-full
+  - libvirt
+  - edk2-ovmf
+  - dnsmasq
+  - libvirt-python
+  - python-lxml
+  - cdrtools
+  - guestfs-tools

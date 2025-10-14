@@ -1,0 +1,118 @@
+---
+- name: Define and activate the storage pool
+  block:
+    - name: Check if the storage pool is already defined
+      ansible.builtin.command: "virsh pool-info {{ pool_name }}"
+      register: pool_info
+      failed_when: false
+      changed_when: false
+    - name: Define the default storage pool if it does not exist
+      ansible.builtin.command:
+        cmd: "virsh pool-define-as --name {{ pool_name }} --type dir --target {{ image_pool_path }}"
+      when: pool_info.rc != 0
+      changed_when: true
+    - name: Ensure the storage pool is active
+      community.libvirt.virt_pool:
+        name: "{{ pool_name }}"
+        state: active
+
+- name: Prepare VM disk and cloud-init ISO
+  block:
+    - name: Check if cloud image already exists
+      ansible.builtin.stat:
+        path: "{{ cloud_image_path }}"
+      register: cloud_image_stat
+    - name: Download the latest Ubuntu cloud image
+      ansible.builtin.get_url:
+        url: "{{ cloud_image_url }}"
+        dest: "{{ cloud_image_path }}"
+        mode: '0644'
+      when: not cloud_image_stat.stat.exists
+    - name: Create the VM disk using qemu-img
+      ansible.builtin.command:
+        cmd: "qemu-img create -f qcow2 -F qcow2 -b {{ cloud_image_path }} {{ vm_disk_path }} 10G"
+        creates: "{{ vm_disk_path }}"
+      changed_when: true
+    - name: Refresh the storage pool to detect the new volume
+      ansible.builtin.command:
+        cmd: "virsh pool-refresh {{ pool_name }}"
+      changed_when: true
+    - name: Create user-data for cloud-init
+      ansible.builtin.copy:
+        dest: "/tmp/user-data"
+        content: |
+          #cloud-config
+          hostname: {{ vm_hostname }}
+          users:
+            - name: {{ new_user }}
+              sudo: ALL=(ALL) NOPASSWD:ALL
+              groups: users, admin
+              shell: /bin/bash
+              passwd: "{{ new_user_password | password_hash('sha512') }}"
+              lock_passwd: false
+          
+          ssh_pwauth: true
+          
+          runcmd:
+            - [ touch, "/home/{{ new_user }}/cloud-init-was-here.txt" ]
+    - name: Create meta-data for cloud-init
+      ansible.builtin.copy:
+        dest: "/tmp/meta-data"
+        content: |
+          instance-id: {{ vm_name }}
+    - name: Create the cloud-init ISO
+      ansible.builtin.command:
+        cmd: "genisoimage -output {{ cloud_init_iso_path }} -volid cidata -joliet -rock /tmp/user-data /tmp/meta-data"
+        creates: "{{ cloud_init_iso_path }}"
+      changed_when: true
+
+- name: Define and start the custom network
+  block:
+    - name: Define the custom libvirt network from XML template
+      community.libvirt.virt_net:
+        command: define
+        name: "{{ libvirt_network }}"
+        xml: "{{ lookup('template', 'create_vm_net.xml.j2') }}"
+    - name: Ensure the custom libvirt network is active and set to autostart
+      community.libvirt.virt_net:
+        name: "{{ libvirt_network }}"
+        state: active
+        autostart: yes
+
+- name: Define and start the VM
+  block:
+    - name: Define the VM from the XML template
+      community.libvirt.virt:
+        command: define
+        xml: "{{ lookup('template', 'create_vm_domain.xml.j2') }}"
+    - name: Ensure the VM is running
+      community.libvirt.virt:
+        name: "{{ vm_name }}"
+        state: running
+
+- name: Wait for the VM to get an IP address
+  ansible.builtin.command: "virsh domifaddr {{ vm_name }}"
+  register: vm_ip_output
+  until: "'ipv4' in vm_ip_output.stdout"
+  retries: 30
+  delay: 5
+  changed_when: false
+
+- name: Extract IP address from command output
+  ansible.builtin.set_fact:
+    vm_ip_address: "{{ vm_ip_output.stdout | regex_search('(\\d+\\.\\d+\\.\\d+\\.\\d+)') }}"
+
+- name: Wait for SSH to be available
+  ansible.builtin.wait_for:
+    host: "{{ vm_ip_address }}"
+    port: 22
+    delay: 5
+    timeout: 120
+    search_regex: OpenSSH
+  delegate_to: localhost
+
+- name: Display the VM's IP address and SSH command
+  ansible.builtin.debug:
+    msg:
+      - "SUCCESS: The VM '{{ vm_name }}' is ready and accessible via SSH."
+      - "Connect with: ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ new_user }}@{{ vm_ip_address }}"

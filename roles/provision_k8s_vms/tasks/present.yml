@@ -1,0 +1,109 @@
+---
+- name: Set internal SSH key variable from user path
+  ansible.builtin.set_fact:
+    ssh_pub_key_content: "{{ lookup('file', ssh_pub_key_path) }}"
+
+- name: Define and start the virtual network
+  block:
+    - name: Define the custom libvirt network from XML template
+      community.libvirt.virt_net:
+        command: define
+        name: "{{ libvirt_net_name }}"
+        xml: "{{ lookup('template', 'k8s-net.xml.j2') }}"
+    - name: Ensure the custom libvirt network is active and set to autostart
+      community.libvirt.virt_net:
+        name: "{{ libvirt_net_name }}"
+        state: active
+        autostart: yes
+
+- name: Download Ubuntu KVM Cloud image
+  ansible.builtin.get_url:
+    url: "{{ vm_image_url }}"
+    dest: "{{ libvirt_storage_pool_path }}/{{ vm_image_name }}"
+
+- name: Create dedicated disk images for each VM
+  ansible.builtin.command:
+    cmd: "qemu-img create -f qcow2 -F qcow2 -b {{ libvirt_storage_pool_path }}/{{ vm_image_name }} {{ libvirt_storage_pool_path }}/{{ item.name }}.qcow2 {{ item.disk_gb }}G"
+    creates: "{{ libvirt_storage_pool_path }}/{{ item.name }}.qcow2"
+  loop: "{{ k8s_vms }}"
+  changed_when: true
+
+- name: Create cloud-init temporary directories
+  ansible.builtin.file:
+    path: "/tmp/{{ item.name }}"
+    state: directory
+  loop: "{{ k8s_vms }}"
+
+- name: Create user-data file for each VM
+  ansible.builtin.template:
+    src: "user-data.j2"
+    dest: "/tmp/{{ item.name }}/user-data"
+  loop: "{{ k8s_vms }}"
+
+- name: Create meta-data file for each VM
+  ansible.builtin.template:
+    src: "meta-data.j2"
+    dest: "/tmp/{{ item.name }}/meta-data"
+  loop: "{{ k8s_vms }}"
+
+- name: Create cloud-init ISO for each VM
+  ansible.builtin.command:
+    cmd: >
+      genisoimage -output {{ libvirt_storage_pool_path }}/{{ item.name }}-cidata.iso
+      -volid cidata -joliet -rock
+      /tmp/{{ item.name }}/user-data /tmp/{{ item.name }}/meta-data
+    creates: "{{ libvirt_storage_pool_path }}/{{ item.name }}-cidata.iso"
+  loop: "{{ k8s_vms }}"
+  changed_when: true
+
+- name: Generate libvirt XML definitions in-memory
+  ansible.builtin.set_fact:
+    vm_definitions: "{{ vm_definitions | default([]) + [ lookup('template', 'vm_domain.xml.j2') ] }}"
+  loop: "{{ k8s_vms }}"
+  loop_control:
+    index_var: vm_index
+
+- name: Define the Kubernetes VMs from generated XML
+  community.libvirt.virt:
+    command: define
+    xml: "{{ item }}"
+  loop: "{{ vm_definitions }}"
+
+- name: Ensure the Kubernetes VMs are running
+  community.libvirt.virt:
+    name: "{{ item.name }}"
+    state: running
+  loop: "{{ k8s_vms }}"
+
+- name: Wait for VMs to get an IP address
+  ansible.builtin.shell:
+    cmd: "virsh domifaddr {{ item.name }} | grep ipv4 | awk '{print $4}' | cut -d '/' -f1"
+  register: vm_ips
+  until: vm_ips.stdout is defined and vm_ips.stdout != ""
+  retries: 30
+  delay: 5
+  changed_when: false
+  loop: "{{ k8s_vms }}"
+  loop_control:
+    loop_var: item
+
+- name: Add VMs to in-memory inventory
+  ansible.builtin.add_host:
+    name: "{{ item.stdout }}"
+    groups:
+      - kubernetes
+      - "{{ 'kube_master' if 'master' in item.item.name else 'kube_workers' }}"
+    ansible_user: ubuntu
+    ansible_python_interpreter: /usr/bin/python3
+  loop: "{{ vm_ips.results }}"
+  changed_when: false
+
+- name: Wait for SSH to be available on all new VMs
+  ansible.builtin.wait_for:
+    host: "{{ item }}"
+    port: 22
+    delay: 10
+    timeout: 300
+    search_regex: OpenSSH
+  delegate_to: localhost
+  loop: "{{ groups['kubernetes'] }}"

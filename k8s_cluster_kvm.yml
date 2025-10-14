@@ -1,0 +1,49 @@
+---
+- name: Provision KVM infrastructure for Kubernetes cluster
+  hosts: localhost
+  become: yes
+
+  pre_tasks:
+    - name: Load all OS-specific variables for KVM host
+      ansible.builtin.include_vars: "roles/kvm_host/vars/{{ ansible_os_family }}.yml"
+
+  roles:
+    - kvm_host
+    - role: provision_k8s_vms
+      vars:
+        state: present
+
+- name: Configure Kubernetes on the new VMs
+  hosts: kubernetes
+  become: yes
+
+  roles:
+    - k8s_prereqs
+    - containerd
+    - role: kube_master
+      when: "'kube_master' in group_names"
+    - role: kube_worker
+      when: "'kube_workers' in group_names"
+
+- name: Retrieve kubeconfig to the local Ansible controller
+  hosts: localhost
+  become: no
+
+  tasks:
+    - name: Create .kube directory locally
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.kube"
+        state: directory
+        mode: '0700'
+
+    - name: Slurp the admin.conf file from the master node
+      ansible.builtin.slurp:
+        src: /home/ubuntu/.kube/config
+      delegate_to: "{{ groups['kube_master'][0] }}"
+      register: kubeconfig_slurp
+
+    - name: Write the kubeconfig file locally
+      ansible.builtin.copy:
+        content: "{{ kubeconfig_slurp.content | b64decode }}"
+        dest: "{{ lookup('env', 'HOME') }}/.kube/config"
+        mode: '0600'

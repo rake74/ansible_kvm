@@ -1,0 +1,49 @@
+---
+- name: Load OS-specific variables for common packages
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
+- name: Install common packages
+  ansible.builtin.package:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Ensure required kernel modules are loaded
+  ansible.builtin.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - br_netfilter
+    - overlay
+
+- name: Set required sysctl parameters for Kubernetes networking
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: true
+    reload: yes
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+
+# Kubernetes nees swap fully disabled
+- name: Disable swap for the current session
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+  changed_when: true
+
+- name: Disable swap persistently in /etc/fstab
+  ansible.posix.mount:
+    name: none
+    fstype: swap
+    state: absent
+
+- name: Disable any systemd-managed swap services
+  ansible.builtin.systemd:
+    name: "{{ swap_systemd_service }}"
+    state: stopped
+    enabled: false
+    masked: true
+  when: swap_systemd_service is defined and swap_systemd_service != ""
+  ignore_errors: true

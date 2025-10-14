@@ -1,0 +1,23 @@
+---
+- name: Destroy and undefine the virtual machine
+  community.libvirt.virt:
+    name: "{{ vm_name }}"
+    state: destroyed
+    command: undefine
+  ignore_errors: yes
+
+- name: Destroy and undefine the custom libvirt network
+  community.libvirt.virt_net:
+    name: "{{ libvirt_network }}"
+    state: inactive
+    command: undefine
+  ignore_errors: yes
+
+- name: Remove the VM-specific disk and ISO files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ vm_disk_path }}"
+    - "{{ cloud_init_iso_path }}"
+  ignore_errors: yes

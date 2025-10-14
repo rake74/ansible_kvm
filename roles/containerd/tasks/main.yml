@@ -1,0 +1,3 @@
+---
+- name: Include OS-specific containerd setup
+  ansible.builtin.include_tasks: "setup-{{ ansible_os_family }}.yml"

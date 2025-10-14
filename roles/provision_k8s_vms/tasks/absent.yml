@@ -1,0 +1,43 @@
+---
+- name: Destroy and undefine the Kubernetes VMs
+  community.libvirt.virt:
+    name: "{{ item.name }}"
+    state: destroyed
+    command: undefine
+  loop: "{{ k8s_vms }}"
+  ignore_errors: true
+  become: yes
+
+- name: Check if the virtual network exists
+  ansible.builtin.command:
+    cmd: "virsh net-info {{ libvirt_net_name }}"
+  register: net_info_result
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: Destroy the virtual network
+  ansible.builtin.command:
+    cmd: "virsh net-destroy {{ libvirt_net_name }}"
+  changed_when: true
+  when: net_info_result.rc == 0
+
+- name: Undefine the virtual network
+  ansible.builtin.command:
+    cmd: "virsh net-undefine {{ libvirt_net_name }}"
+  changed_when: true
+  when: net_info_result.rc == 0
+
+- name: Remove VM disk images and cloud-init ISOs
+  ansible.builtin.file:
+    path: "{{ libvirt_storage_pool_path }}/{{ item }}"
+    state: absent
+  loop:
+    - "k8s-master.qcow2"
+    - "k8s-worker1.qcow2"
+    - "k8s-worker2.qcow2"
+    - "k8s-master-cidata.iso"
+    - "k8s-worker1-cidata.iso"
+    - "k8s-worker2-cidata.iso"
+  ignore_errors: true
+  become: yes

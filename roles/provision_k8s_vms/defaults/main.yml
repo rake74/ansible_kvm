@@ -1,0 +1,23 @@
+---
+# List of VMs to create for the cluster
+k8s_vms:
+  - { name: 'k8s-master',  disk_gb: 25, mem_gb: 4, vcpus: 2 }
+  - { name: 'k8s-worker1', disk_gb: 20, mem_gb: 2, vcpus: 2 }
+  - { name: 'k8s-worker2', disk_gb: 20, mem_gb: 2, vcpus: 2 }
+
+# SSH Configuration
+# TODO: Improve this to use the SSH key that would be used.
+ssh_pub_key_path: "~/.ssh/id_ed25519.pub"
+
+# Storage Configuration
+libvirt_storage_pool_path: "/var/lib/libvirt/images"
+
+# Virtual Network Configuration
+libvirt_net_name: "k8s-net"
+libvirt_net_gateway: "192.168.123.1"
+libvirt_dhcp_range_start: "192.168.123.100"
+libvirt_dhcp_range_end: "192.168.123.200"
+
+# VM Base Image Configuration
+vm_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+vm_image_name: "jammy-server-cloudimg-amd64.img"

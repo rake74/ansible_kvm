@@ -1,0 +1,3 @@
+---
+- name: Include OS-specific prerequisite tasks
+  ansible.builtin.include_tasks: "setup-{{ ansible_os_family }}.yml"

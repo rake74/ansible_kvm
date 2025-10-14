@@ -1,0 +1,19 @@
+---
+- name: Install kubeadm, kubelet, kubectl
+  ansible.builtin.pacman:
+    name:
+      - kubeadm
+      - kubelet
+      - kubectl
+    state: present
+
+- name: Enable kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+
+- name: Join worker to the cluster
+  ansible.builtin.command:
+    cmd: "{{ hostvars[groups['kube_master'][0]].join_command }}"
+    creates: /etc/kubernetes/kubelet.conf
+  when: hostvars[groups['kube_master'][0]].join_command is defined

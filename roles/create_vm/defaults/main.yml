@@ -1,0 +1,26 @@
+---
+# roles/create_vm/defaults/main.yml
+
+# --- VM Configuration ---
+vm_name: "ubuntu-vm"
+vm_memory_mb: 2048
+vm_vcpus: 2
+vm_hostname: "ubuntu-test"
+new_user: "testuser"
+new_user_password: "password"
+
+# --- Network Configuration ---
+libvirt_network: "create-vm"
+libvirt_net_gateway: "192.168.10.1"
+libvirt_net_netmask: "255.255.255.240"
+libvirt_dhcp_range_start: "192.168.10.2"
+libvirt_dhcp_range_end: "192.168.10.14"
+
+# --- Storage and Image Configuration ---
+pool_name: "default"
+cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+base_image_name: "jammy-server-cloudimg-amd64.img"
+image_pool_path: "/var/lib/libvirt/images"
+cloud_image_path: "{{ image_pool_path }}/{{ base_image_name }}"
+vm_disk_path: "{{ image_pool_path }}/{{ vm_name }}.qcow2"
+cloud_init_iso_path: "{{ image_pool_path }}/{{ vm_name }}-cloud-init.iso"

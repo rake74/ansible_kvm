@@ -1,0 +1,9 @@
+---
+- name: Tear down the KVM test VM
+  hosts: localhost
+  become: yes
+
+  roles:
+    - role: create_vm
+      vars:
+        state: absent

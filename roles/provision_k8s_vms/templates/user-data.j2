@@ -1,0 +1,21 @@
+#cloud-config
+bootcmd:
+  - [ systemctl, disable, systemd-networkd-wait-online.service ]
+  - [ systemctl, mask, systemd-networkd-wait-online.service ]
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin
+    home: /home/ubuntu
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - "{{ ssh_pub_key_content }}"
+
+network:
+  version: 2
+  ethernets:
+    id0:
+      match:
+        name: en*
+      dhcp4: true

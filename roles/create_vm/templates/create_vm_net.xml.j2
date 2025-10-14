@@ -1,0 +1,11 @@
+<network>
+  <name>{{ libvirt_network }}</name>
+  <forward mode='nat'/>
+  <bridge name='br-createvm' stp='on' delay='0'/>
+  <ip address='{{ libvirt_net_gateway }}' netmask='{{ libvirt_net_netmask }}'>
+    <dhcp>
+      <range start='{{ libvirt_dhcp_range_start }}' end='{{ libvirt_dhcp_range_end }}'/>
+    </dhcp>
+  </ip>
+  <dns enable='yes'/>
+</network>

@@ -1,0 +1,97 @@
+---
+- name: Create directory for Kubernetes apt keyrings
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add Kubernetes GPG key
+  ansible.builtin.get_url:
+    url: https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: '0644'
+
+- name: Add Kubernetes apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /"
+    state: present
+    filename: kubernetes
+
+- name: Install kubeadm, kubelet, kubectl
+  ansible.builtin.apt:
+    name:
+      - kubeadm
+      - kubelet
+      - kubectl
+    state: present
+    update_cache: yes
+
+- name: Hold Kubernetes packages at their current version
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
+
+- name: Enable kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+
+- name: Initialize Kubernetes cluster
+  ansible.builtin.command:
+    cmd: "kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address={{ ansible_default_ipv4.address }}"
+    creates: /etc/kubernetes/admin.conf
+  register: kubeadm_init_output
+
+- name: Create .kube directory for ubuntu user
+  ansible.builtin.file:
+    path: "/home/ubuntu/.kube"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy admin.conf to user's .kube directory
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/ubuntu/.kube/config"
+    remote_src: true
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Wait for the API server to be ready
+  ansible.builtin.uri:
+    url: "https://127.0.0.1:6443/healthz"
+    validate_certs: false
+    method: GET
+  register: api_health_check
+  until: api_health_check.status == 200
+  retries: 60
+  delay: 5
+  when: kubeadm_init_output.changed
+
+- name: Install Calico Pod Network Addon
+  ansible.builtin.command: "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f https://docs.projectcalico.org/manifests/calico.yaml"
+  changed_when: true
+  when: kubeadm_init_output.changed
+
+- name: Wait for the master node to be Ready
+  ansible.builtin.shell: "kubectl --kubeconfig=/etc/kubernetes/admin.conf get node {{ ansible_hostname }} -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'"
+  register: node_status
+  until: node_status.stdout == "True"
+  retries: 60
+  delay: 5
+  when: kubeadm_init_output.changed
+
+- name: Get kubeadm join command for workers
+  ansible.builtin.command: kubeadm token create --print-join-command
+  register: kubeadm_join_command
+  changed_when: true
+
+- name: Save join command for later use
+  ansible.builtin.set_fact:
+    join_command: "{{ kubeadm_join_command.stdout }}"

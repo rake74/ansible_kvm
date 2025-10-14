@@ -1,0 +1,16 @@
+---
+- name: Create the KVM test VM
+  hosts: localhost
+  become: yes
+
+  pre_tasks:
+    - name: Load all OS-specific variables for all roles
+      ansible.builtin.include_vars: "{{ item }}"
+      loop:
+        - "roles/kvm_host/vars/{{ ansible_os_family }}.yml"
+
+  roles:
+    - kvm_host
+    - role: create_vm
+      vars:
+        state: present

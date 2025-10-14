@@ -1,0 +1,9 @@
+---
+- name: Tear down KVM infrastructure for Kubernetes cluster
+  hosts: localhost
+  become: yes
+
+  roles:
+    - role: provision_k8s_vms
+      vars:
+        state: absent

@@ -1,0 +1,8 @@
+---
+common_packages:
+  - curl
+  - wget
+  - gnupg
+  - ca-certificates
+
+swap_systemd_service: ""
