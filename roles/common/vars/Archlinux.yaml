@@ -6,3 +6,13 @@ common_packages:
   - ca-certificates
 
 swap_systemd_service: "systemd-zram-setup@zram0.service"
+
+virtualization_host_packages:
+  - qemu-full
+  - libvirt
+  - edk2-ovmf
+  - dnsmasq
+  - libvirt-python
+  - python-lxml
+  - cdrtools
+  - guestfs-tools

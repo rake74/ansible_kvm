@@ -1,6 +1,4 @@
 ---
-# roles/create_vm/tasks/present.yml
-
 - name: Define and activate the storage pool
   block:
     - name: Check if the storage pool is already defined
@@ -109,6 +107,10 @@
   delay: 5
   changed_when: false
 
-- name: Display the VM's IP address
+- name: Display the VM's IP address and SSH command
   ansible.builtin.debug:
-    msg: "The VM '{{ vm_name }}' has been created. SSH with 'ssh {{ new_user }}@<IP_ADDRESS>'. The full IP info is: {{ vm_ip_output.stdout }}"
+    msg:
+      - "SUCCESS: The VM '{{ vm_name }}' has been created."
+      - "IP Address Info: {{ vm_ip_output.stdout }}"
+      - "NOTE: It may take a minute for the SSH service to be ready."
+      - "Connect with: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ new_user }}@{{ vm_ip_output.stdout | regex_search('(\\d+\\.\\d+\\.\\d+\\.\\d+)') }}"

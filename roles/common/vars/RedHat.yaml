@@ -6,3 +6,11 @@ common_packages:
   - ca-certificates
 
 swap_systemd_service: ""
+
+virtualization_host_packages:
+  - qemu-kvm
+  - libvirt-daemon
+  - python3-libvirt
+  - libvirt-client
+  - python3-lxml
+  - genisoimage
