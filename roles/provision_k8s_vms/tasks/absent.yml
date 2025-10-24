@@ -8,17 +8,25 @@
   ignore_errors: true
   become: yes
 
+- name: Check if the virtual network exists
+  ansible.builtin.command:
+    cmd: "virsh net-info {{ libvirt_net_name }}"
+  register: net_info_result
+  changed_when: false
+  failed_when: false # We expect this to fail if the network is not found
+  become: yes
+
 - name: Destroy the virtual network
   ansible.builtin.command:
     cmd: "virsh net-destroy {{ libvirt_net_name }}"
   changed_when: true
-  ignore_errors: true # It's okay if it's already inactive
+  when: net_info_result.rc == 0 # Only run if the check command succeeded
 
 - name: Undefine the virtual network
   ansible.builtin.command:
     cmd: "virsh net-undefine {{ libvirt_net_name }}"
   changed_when: true
-  ignore_errors: true # It's okay if it's already undefined
+  when: net_info_result.rc == 0 # Only run if the check command succeeded
 
 - name: Remove VM disk images and cloud-init ISOs
   ansible.builtin.file:
