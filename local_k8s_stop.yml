@@ -1,5 +1,5 @@
 ---
-- name: Tear down Kubernetes cluster
+- name: Tear down local Kubernetes cluster
   hosts: kubernetes
   become: yes
   tasks:
@@ -8,13 +8,6 @@
       register: kubeadm_reset_result
       failed_when: kubeadm_reset_result.rc != 0 and "could not find a Kubernetes cluster" not in kubeadm_reset_result.stderr
       changed_when: kubeadm_reset_result.rc == 0
-
-    - name: Stop and disable the kubelet service
-      ansible.builtin.systemd:
-        name: kubelet
-        state: stopped
-        enabled: false
-      ignore_errors: true # It won't fail if the service is already gone
 
     - name: Remove CNI networking configuration
       ansible.builtin.file:
@@ -26,3 +19,19 @@
       ansible.builtin.file:
         path: "/home/{{ ansible_user }}/.kube"
         state: absent
+
+    - name: Find orphaned Calico network interfaces
+      ansible.builtin.shell: "ip -br a | grep '^cali' | awk '{print $1}' | cut -d'@' -f1"
+      register: calico_interfaces
+      changed_when: false
+      ignore_errors: true
+
+    - name: Delete orphaned Calico network interfaces
+      ansible.builtin.command: "ip link delete {{ item }}"
+      loop: "{{ calico_interfaces.stdout_lines }}"
+      when: calico_interfaces.stdout != ""
+      ignore_errors: true
+
+    # NOTE: The tunl0 interface is managed by the ipip kernel module and can
+    # sometimes persist after teardown. It is harmless and can be ignored.
+    # A full reboot will always clean it up.

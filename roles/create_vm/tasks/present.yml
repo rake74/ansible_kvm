@@ -79,15 +79,6 @@
         state: active
         autostart: yes
 
-- name: Allow DHCP requests on the VM bridge (using iptables module)
-  ansible.builtin.iptables:
-    chain: INPUT
-    in_interface: "br-createvm"
-    protocol: udp
-    destination_port: "67"
-    jump: ACCEPT
-    action: insert
-
 - name: Define and start the VM
   block:
     - name: Define the VM from the XML template
@@ -107,10 +98,21 @@
   delay: 5
   changed_when: false
 
+- name: Extract IP address from command output
+  ansible.builtin.set_fact:
+    vm_ip_address: "{{ vm_ip_output.stdout | regex_search('(\\d+\\.\\d+\\.\\d+\\.\\d+)') }}"
+
+- name: Wait for SSH to be available
+  ansible.builtin.wait_for:
+    host: "{{ vm_ip_address }}"
+    port: 22
+    delay: 5
+    timeout: 120
+    search_regex: OpenSSH
+  delegate_to: localhost
+
 - name: Display the VM's IP address and SSH command
   ansible.builtin.debug:
     msg:
-      - "SUCCESS: The VM '{{ vm_name }}' has been created."
-      - "IP Address Info: {{ vm_ip_output.stdout }}"
-      - "NOTE: It may take a minute for the SSH service to be ready."
-      - "Connect with: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ new_user }}@{{ vm_ip_output.stdout | regex_search('(\\d+\\.\\d+\\.\\d+\\.\\d+)') }}"
+      - "SUCCESS: The VM '{{ vm_name }}' is ready and accessible via SSH."
+      - "Connect with: ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ new_user }}@{{ vm_ip_address }}"

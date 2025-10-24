@@ -1,16 +1,33 @@
 ---
-- name: Provision KVM infrastructure for Kubernetes cluster
+- name: Play 1 - Provision KVM infrastructure for Kubernetes cluster
   hosts: localhost
   become: yes
 
   pre_tasks:
-    - name: Load all OS-specific variables for all roles
-      ansible.builtin.include_vars: "{{ item }}"
-      loop:
-        - "roles/kvm_host/vars/{{ ansible_os_family }}.yml"
+    - name: Load all OS-specific variables for KVM host
+      ansible.builtin.include_vars: "roles/kvm_host/vars/{{ ansible_os_family }}.yml"
 
   roles:
     - kvm_host
     - role: provision_k8s_vms
       vars:
         state: present
+
+# -------------------------------------------------------------------
+# The second play begins here. It will automatically use the in-memory
+# inventory of VMs created by the play above.
+# -------------------------------------------------------------------
+
+- name: Play 2 - Configure Kubernetes on the new VMs
+  hosts: kubernetes
+  become: yes
+
+  roles:
+    - k8s_prereqs
+    - containerd
+    - role: kube_master
+      # This ensures the master role only runs on the master host
+      when: "'kube_master' in group_names"
+    - role: kube_worker
+      # This ensures the worker role only runs on the worker hosts
+      when: "'kube_workers' in group_names"

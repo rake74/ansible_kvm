@@ -4,25 +4,17 @@
     ssh_pub_key_content: "{{ lookup('file', ssh_pub_key_path) }}"
 
 - name: Define and start the virtual network
-  community.libvirt.virt_net:
-    command: define
-    name: "{{ libvirt_net_name }}"
-    xml: "{{ lookup('template', 'k8s-net.xml.j2') }}"
-
-- name: Ensure the virtual network is active
-  community.libvirt.virt_net:
-    name: "{{ libvirt_net_name }}"
-    state: active
-    autostart: yes
-
-- name: Allow DHCP requests on the VM bridge
-  ansible.builtin.iptables:
-    chain: INPUT
-    in_interface: "virbr1"
-    protocol: udp
-    destination_port: "67"
-    jump: ACCEPT
-    action: insert
+  block:
+    - name: Define the custom libvirt network from XML template
+      community.libvirt.virt_net:
+        command: define
+        name: "{{ libvirt_net_name }}"
+        xml: "{{ lookup('template', 'k8s-net.xml.j2') }}"
+    - name: Ensure the custom libvirt network is active and set to autostart
+      community.libvirt.virt_net:
+        name: "{{ libvirt_net_name }}"
+        state: active
+        autostart: yes
 
 - name: Download Ubuntu KVM Cloud image
   ansible.builtin.get_url:
@@ -102,6 +94,7 @@
       - kubernetes
       - "{{ 'kube_master' if 'master' in item.item.name else 'kube_workers' }}"
     ansible_user: ubuntu
+    ansible_python_interpreter: /usr/bin/python3
   loop: "{{ vm_ips.results }}"
   changed_when: false
 

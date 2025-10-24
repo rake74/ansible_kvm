@@ -1,6 +1,4 @@
 ---
-# roles/create_vm/tasks/absent.yml
-
 - name: Destroy and undefine the virtual machine
   community.libvirt.virt:
     name: "{{ vm_name }}"
@@ -13,16 +11,6 @@
     name: "{{ libvirt_network }}"
     state: inactive
     command: undefine
-  ignore_errors: yes
-
-- name: Remove the DHCP firewall rule (using iptables module)
-  ansible.builtin.iptables:
-    chain: INPUT
-    in_interface: "br-createvm"
-    protocol: udp
-    destination_port: "67"
-    jump: ACCEPT
-    state: absent
   ignore_errors: yes
 
 - name: Remove the VM-specific disk and ISO files
