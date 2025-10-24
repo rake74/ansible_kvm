@@ -31,3 +31,30 @@
     - role: kube_worker
       # This ensures the worker role only runs on the worker hosts
       when: "'kube_workers' in group_names"
+
+# -------------------------------------------------------------------
+# Play 3: Retrieve the kubeconfig file to the local machine
+# -------------------------------------------------------------------
+
+- name: Play 3 - Retrieve kubeconfig to the local Ansible controller
+  hosts: localhost
+  become: no # These tasks run as your local user
+
+  tasks:
+    - name: Create .kube directory locally
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.kube"
+        state: directory
+        mode: '0700'
+
+    - name: Slurp the admin.conf file from the master node
+      ansible.builtin.slurp:
+        src: /home/ubuntu/.kube/config
+      delegate_to: "{{ groups['kube_master'][0] }}"
+      register: kubeconfig_slurp
+
+    - name: Write the kubeconfig file locally
+      ansible.builtin.copy:
+        content: "{{ kubeconfig_slurp.content | b64decode }}"
+        dest: "{{ lookup('env', 'HOME') }}/.kube/config"
+        mode: '0600'
