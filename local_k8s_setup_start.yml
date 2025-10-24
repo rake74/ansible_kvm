@@ -3,7 +3,7 @@
   hosts: kubernetes
   become: yes
   roles:
-    - common
+    - k8s_prereqs
     - containerd
 
 - name: Setup Kubernetes Master
