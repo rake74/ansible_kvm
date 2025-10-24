@@ -1,0 +1,31 @@
+---
+- name: Destroy and undefine the Kubernetes VMs
+  community.libvirt.virt:
+    name: "{{ item.name }}"
+    state: destroyed
+    command: undefine
+  loop: "{{ k8s_vms }}"
+  ignore_errors: true
+  become: yes
+
+- name: Remove VM disk images and cloud-init ISOs
+  ansible.builtin.file:
+    path: "{{ libvirt_storage_pool_path }}/{{ item }}"
+    state: absent
+  loop:
+    - "k8s-master.qcow2"
+    - "k8s-worker1.qcow2"
+    - "k8s-worker2.qcow2"
+    - "k8s-master-cidata.iso"
+    - "k8s-worker1-cidata.iso"
+    - "k8s-worker2-cidata.iso"
+  ignore_errors: true
+  become: yes
+
+- name: Destroy and undefine the virtual network
+  community.libvirt.virt_net:
+    name: "{{ libvirt_net_name }}"
+    state: inactive
+    command: undefine
+  ignore_errors: true
+  become: yes

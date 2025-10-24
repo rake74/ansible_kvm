@@ -1,0 +1,22 @@
+---
+- name: Ensure virtualization packages are installed
+  ansible.builtin.package:
+    name: "{{ virtualization_host_packages }}"
+    state: present
+
+- name: Configure libvirtd to trust the 'libvirt' group
+  ansible.builtin.lineinfile:
+    path: /etc/libvirt/libvirtd.conf
+    regexp: "^#?{{ item.key }}"
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: 'unix_sock_group', value: '"libvirt"' }
+    - { key: 'unix_sock_rw_perms', value: '"0770"' }
+    - { key: 'auth_unix_rw', value: '"none"' }
+  notify: Restart libvirt service
+
+- name: Ensure libvirt service is active and enabled
+  ansible.builtin.systemd:
+    name: libvirtd.service
+    state: started
+    enabled: true

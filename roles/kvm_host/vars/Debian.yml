@@ -1,0 +1,8 @@
+---
+virtualization_host_packages:
+  - qemu-kvm
+  - libvirt-daemon-system
+  - libvirt-clients
+  - python3-libvirt
+  - python3-lxml
+  - genisoimage

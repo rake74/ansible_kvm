@@ -8,10 +8,10 @@ all:
   children:
     kubernetes:
       hosts:
-        localhost: # <--- Change to 'localhost'
+        localhost:
     kube_master:
       hosts:
-        localhost: # <--- Change to 'localhost'
+        localhost:
     kube_workers:
       hosts:
-        localhost: # <--- Change to 'localhost'
+        localhost:

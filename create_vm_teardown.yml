@@ -1,8 +1,9 @@
 ---
 - name: Tear down the KVM test VM
   hosts: localhost
-  connection: local
   become: yes
+
   roles:
     - role: create_vm
-      state: absent
+      vars:
+        state: absent
