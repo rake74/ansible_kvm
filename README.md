@@ -145,3 +145,6 @@ This project is organized into top-level playbooks and a set of modular, reusabl
 *   **Responsibility:** Joins worker nodes to an existing Kubernetes cluster.
 *   `tasks/main.yml`: A dispatcher that calls an OS-specific task file.
 *   `tasks/setup-*.yml`: Contains the logic to install `kubeadm` and run the `kubeadm join` command provided by the master node.
+
+## Example run output.
+[EXAMPLE RUN](./EXAMPLE_RUN.md)
