@@ -1,4 +1,24 @@
 ---
+- name: Determine SSH public key path dynamically
+  block:
+    - name: Run script to find the correct ssh public key
+      command: "{{ playbook_dir }}/scripts/keyfiles.sh"
+      delegate_to: localhost
+      register: ssh_key_script_output
+      changed_when: false
+      ignore_errors: true
+      failed_when: ssh_key_script_output.rc > 1
+      # Explicitly pass required environment variables to the script
+      environment:
+        HOME: "{{ lookup('env', 'HOME') }}"
+        SSH_AUTH_SOCK: "{{ lookup('env', 'SSH_AUTH_SOCK') }}"
+
+    - name: Set ssh_pub_key_path fact from script output
+      set_fact:
+        ssh_pub_key_path: "{{ ssh_key_script_output.stdout | trim }}"
+      when: ssh_key_script_output.rc == 0
+  run_once: true
+
 - name: Run creation tasks
   ansible.builtin.include_tasks: present.yml
   when: state | default('present') == 'present'
